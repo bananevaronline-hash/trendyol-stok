@@ -111,12 +111,12 @@ loadFirmsFromEnv();
 // ================================================================
 //  TRENDYOL API HELPERs
 // ================================================================
-function trendyolHeaders(apiKey, apiSecret) {
+function trendyolHeaders(apiKey, apiSecret, supplierId) {
   const token = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
   return {
     'Authorization': `Basic ${token}`,
     'Content-Type': 'application/json',
-    'User-Agent': 'StokSenkron/1.0'
+    'User-Agent': `${supplierId} - SelfIntegration`
   };
 }
 
@@ -131,7 +131,7 @@ async function fetchFirmProducts(firm) {
     while (true) {
       const url = `${BASE_URL}/${firm.supplier_id}/products?page=${page}&size=${size}&approved=true`;
       const res = await axios.get(url, {
-        headers: trendyolHeaders(firm.api_key, firm.api_secret),
+        headers: trendyolHeaders(firm.api_key, firm.api_secret, firm.supplier_id),
         timeout: 15000
       });
       const content = res.data?.content || [];
@@ -162,7 +162,7 @@ async function fetchNewOrders(firm) {
     const from = now - (10 * 60 * 1000); // son 10 dakika
     const url = `${BASE_URL}/${firm.supplier_id}/orders?status=Created&orderByField=PackageLastModifiedDate&orderByDirection=DESC&startDate=${from}&endDate=${now}&size=200`;
     const res = await axios.get(url, {
-      headers: trendyolHeaders(firm.api_key, firm.api_secret),
+      headers: trendyolHeaders(firm.api_key, firm.api_secret, firm.supplier_id),
       timeout: 15000
     });
     return res.data?.content || [];
@@ -183,7 +183,7 @@ async function updateTrendyolStock(firm, barcode, qty) {
       }]
     };
     await axios.post(url, payload, {
-      headers: trendyolHeaders(firm.api_key, firm.api_secret),
+      headers: trendyolHeaders(firm.api_key, firm.api_secret, firm.supplier_id),
       timeout: 15000
     });
     return true;
