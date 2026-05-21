@@ -485,7 +485,7 @@ function renderDepotTable(data) {
       <td style="font-family:'DM Mono',monospace;color:var(--ac)">${p.model}</td>
       <td>${p.color}</td>
       <td><span style="background:var(--bg3);padding:2px 7px;border-radius:5px;font-size:11px">${p.size}</span></td>
-      <td><b style="color:${p.stock<=0?'var(--re)':p.stock<=3?'var(--ye)':'var(--gr)';}">${p.stock}</b></td>
+      <td><b style="color:${p.stock<=0?'var(--re)':p.stock<=3?'var(--ye)':'var(--gr)'}">${p.stock}</b></td>
       <td><span class="badge ${p.stock<=0?'b-err':p.stock<=3?'b-warn':'b-ok'}">${p.stock<=0?'Tükendi':p.stock<=3?'Kritik':'Yeterli'}</span></td>
       <td>
         <button class="btn bg2b bsm" onclick="quickSync('${p.model}','${p.color}','${p.size}')">↺ Sync</button>
