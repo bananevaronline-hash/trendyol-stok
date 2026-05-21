@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Stok Senkron Paneli</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0d10;--bg2:#141417;--bg3:#1a1a1e;--bg4:#222228;--bg5:#2a2a32;
+  --bd:rgba(255,255,255,.06);--bd2:rgba(255,255,255,.11);
+  --tx:#eeede6;--tx2:#8f8e97;--tx3:#52515a;
+  --ac:#f97316;--ac2:#fb923c;--gr:#22c55e;--re:#ef4444;--bl:#3b82f6;--ye:#eab308;
+  --r:10px;--rl:14px;font-family:'DM Sans',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--tx);min-height:100vh;font-size:14px;}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:3px;}
+.shell{display:flex;min-height:100vh;}
+.sb{width:220px;background:var(--bg2);border-right:1px solid var(--bd);position:fixed;top:0;left:0;height:100vh;display:flex;flex-direction:column;z-index:20;}
+.main{margin-left:220px;flex:1;padding:22px 26px;}
+.logo{padding:16px 14px 12px;border-bottom:1px solid var(--bd);}
+.logo-mark{font-size:13px;font-weight:600;color:var(--ac);display:flex;align-items:center;gap:7px;}
+.logo-sub{font-size:10px;color:var(--tx3);margin-top:2px;font-family:'DM Mono',monospace;}
+.nav{padding:8px;flex:1;}
+.ni{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--tx2);font-size:13px;border:none;background:none;width:100%;text-align:left;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.ni:hover{background:var(--bg3);color:var(--tx);}
+.ni.active{background:rgba(249,115,22,.12);color:var(--ac);}
+.ni svg{width:15px;height:15px;flex-shrink:0;}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
+.pt{font-size:18px;font-weight:600;letter-spacing:-.4px;}
+.card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rl);padding:16px 18px;margin-bottom:14px;}
+.ct{font-size:13px;font-weight:600;margin-bottom:12px;}
+.mrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-bottom:16px;}
+.mc{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);padding:12px 14px;}
+.mc.hi{border-color:rgba(249,115,22,.22);background:rgba(249,115,22,.04);}
+.mc.gn{border-color:rgba(34,197,94,.22);background:rgba(34,197,94,.04);}
+.mc.rd{border-color:rgba(239,68,68,.2);background:rgba(239,68,68,.04);}
+.mc.bl{border-color:rgba(59,130,246,.2);background:rgba(59,130,246,.04);}
+.mcl{font-size:10px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;}
+.mcv{font-size:20px;font-weight:600;}
+.mcs{font-size:11px;color:var(--tx3);margin-top:3px;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{font-size:10px;font-weight:600;color:var(--tx3);text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;}
+td{padding:8px 8px;border-bottom:1px solid var(--bd);color:var(--tx);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,.015);}
+.tw{overflow-x:auto;}
+.badge{display:inline-flex;align-items:center;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;}
+.b-ok{background:rgba(34,197,94,.12);color:#4ade80;}
+.b-err{background:rgba(239,68,68,.1);color:#f87171;}
+.b-warn{background:rgba(234,179,8,.12);color:#fbbf24;}
+.b-info{background:rgba(59,130,246,.12);color:#60a5fa;}
+input,select,textarea{background:var(--bg3);border:1px solid var(--bd);border-radius:8px;color:var(--tx);padding:7px 9px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s;width:100%;}
+input:focus,select:focus{border-color:var(--ac);}
+.btn{padding:7px 14px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.bp{background:var(--ac);color:#fff;}.bp:hover{background:var(--ac2);}
+.bg2b{background:var(--bg3);color:var(--tx2);border:1px solid var(--bd);}.bg2b:hover{color:var(--tx);}
+.bdr{background:rgba(239,68,68,.1);color:var(--re);border:1px solid rgba(239,68,68,.2);}
+.bsm{padding:4px 10px;font-size:12px;}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:10px;}
+.fg{display:flex;flex-direction:column;gap:4px;}
+.fl{font-size:11px;color:var(--tx2);font-weight:500;}
+.sec{display:none;}
+.sec.active{display:block;}
+.dot-live{width:7px;height:7px;border-radius:50%;background:var(--gr);display:inline-block;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.status-bar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--tx3);padding:10px 14px;background:var(--bg3);border-radius:8px;margin-bottom:14px;}
+.tag{display:inline-flex;align-items:center;background:var(--bg4);border-radius:5px;padding:2px 8px;font-size:11px;font-family:'DM Mono',monospace;color:var(--tx2);}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;display:none;align-items:center;justify-content:center;padding:16px;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--bg2);border:1px solid var(--bd2);border-radius:16px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;}
+.mhead{display:flex;align-items:center;justify-content:space-between;padding:18px 22px 0;}
+.mtitle{font-size:15px;font-weight:600;}
+.mbody{padding:16px 22px;}
+.mfoot{padding:0 22px 18px;display:flex;gap:8px;justify-content:flex-end;}
+.spinner{border:2px solid var(--bg5);border-top-color:var(--ac);border-radius:50%;width:16px;height:16px;animation:spin .7s linear infinite;display:inline-block;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:28px;color:var(--tx3);font-size:13px;}
+.log-ok{color:var(--gr);}
+.log-err{color:var(--re);}
+.search-bar{background:var(--bg3);border:1px solid var(--bd);border-radius:8px;padding:7px 12px;font-size:13px;color:var(--tx);outline:none;width:220px;}
+.search-bar:focus{border-color:var(--ac);}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media(max-width:768px){.sb{display:none}.main{margin-left:0}.g2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- SIDEBAR -->
+<nav class="sb">
+  <div class="logo">
+    <div class="logo-mark">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+      Stok Senkron
+    </div>
+    <div class="logo-sub">Trendyol · 4 Firma · 7/24</div>
+  </div>
+  <div class="nav">
+    <button class="ni active" onclick="go('dashboard')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+    </button>
+    <button class="ni" onclick="go('depot')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 3h20M2 3v18h20V3M8 3v18M16 3v18"/></svg>
+      Ana Depo
+    </button>
+    <button class="ni" onclick="go('mapping')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      Ürün Eşleştirme
+    </button>
+    <button class="ni" onclick="go('firms')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Firmalar
+    </button>
+    <button class="ni" onclick="go('adjust')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Stok Düzenle
+    </button>
+    <button class="ni" onclick="go('orders')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+      Siparişler
+    </button>
+    <button class="ni" onclick="go('logs')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Sync Logları
+    </button>
+  </div>
+  <div style="padding:10px 8px;border-top:1px solid var(--bd);">
+    <div id="sync-status" style="font-size:11px;color:var(--tx3);text-align:center;padding:6px 0;">
+      <span class="dot-live"></span> Sistem aktif
+    </div>
+    <button class="btn bp bsm" style="width:100%;margin-top:6px" onclick="manualSync()">↺ Şimdi Sync Et</button>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="sec active">
+  <div class="topbar">
+    <div><div class="pt">Dashboard</div><div style="font-size:12px;color:var(--tx3);margin-top:1px">Stok senkronizasyon durumu</div></div>
+    <button class="btn bg2b bsm" onclick="loadDashboard()">↺ Yenile</button>
+  </div>
+  <div class="mrow" id="dash-metrics"></div>
+  <div class="g2">
+    <div class="card">
+      <div class="ct">Firma Durumları</div>
+      <div id="dash-firms"></div>
+    </div>
+    <div class="card">
+      <div class="ct">Son Sync Logları</div>
+      <div id="dash-logs"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct">Eşleştirilmemiş Ürünler <span id="unmapped-count" style="font-size:11px;color:var(--re)"></span></div>
+    <div id="dash-unmapped"></div>
+  </div>
+</div>
+
+<!-- ANA DEPO -->
+<div id="depot" class="sec">
+  <div class="topbar">
+    <div><div class="pt">Ana Depo</div><div style="font-size:12px;color:var(--tx3)">Merkezi stok havuzu</div></div>
+    <div style="display:flex;gap:8px">
+      <input class="search-bar" placeholder="Model, renk, beden ara..." id="depot-search" oninput="filterDepot()">
+      <button class="btn bp bsm" onclick="openAddDepotModal()">+ Ürün Ekle</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="tw"><table>
+      <thead><tr><th>Model</th><th>Renk</th><th>Beden</th><th>Stok</th><th>Durum</th><th>İşlem</th></tr></thead>
+      <tbody id="depot-tbl"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ÜRÜN EŞLEŞTİRME -->
+<div id="mapping" class="sec">
+  <div class="topbar">
+    <div>
+      <div class="pt">Ürün Eşleştirme</div>
+      <div style="font-size:12px;color:var(--tx3)">Trendyol ürününü ana depo ürünüyle bir kez eşleştir</div>
+    </div>
+    <button class="btn bp bsm" onclick="openMappingModal()">+ Yeni Eşleştirme</button>
+  </div>
+  <div class="card" style="background:rgba(249,115,22,.04);border-color:rgba(249,115,22,.2);margin-bottom:14px">
+    <div style="font-size:12px;color:var(--tx2);line-height:1.6">
+      <b style="color:var(--ac)">Nasıl çalışır?</b> — Firmayı seç → Trendyol'daki ürünleri otomatik çeker → Bir ürünü ana depodaki karşılığıyla eşleştir → Bir daha dokunmana gerek yok. Her satışta stok otomatik düşer.
+    </div>
+  </div>
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="ct" style="margin-bottom:0">Mevcut Eşleştirmeler (<span id="mapping-cnt">0</span>)</div>
+      <select id="mapping-firm-filter" style="font-size:12px;padding:5px 8px;width:auto" onchange="loadMappings()">
+        <option value="">Tüm firmalar</option>
+      </select>
+    </div>
+    <div class="tw"><table>
+      <thead><tr><th>Firma</th><th>Trendyol Barcodu</th><th>Ürün Adı</th><th>→ Depo Model</th><th>→ Renk</th><th>→ Beden</th><th></th></tr></thead>
+      <tbody id="mapping-tbl"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- FİRMALAR -->
+<div id="firms" class="sec">
+  <div class="topbar">
+    <div class="pt">Firmalar</div>
+    <button class="btn bp bsm" onclick="openFirmModal()">+ Firma Ekle</button>
+  </div>
+  <div id="firms-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px"></div>
+</div>
+
+<!-- STOK DÜZENLE -->
+<div id="adjust" class="sec">
+  <div class="topbar">
+    <div><div class="pt">Stok Düzenle</div><div style="font-size:12px;color:var(--tx3)">İade, yeni mal, manuel düzeltme</div></div>
+  </div>
+  <div class="card" style="max-width:520px">
+    <div class="ct">Stok Güncelle</div>
+    <div class="fgrid">
+      <div class="fg">
+        <span class="fl">Model</span>
+        <select id="adj-model" onchange="adjModelChange()"><option value="">— Seç —</option></select>
+      </div>
+      <div class="fg">
+        <span class="fl">Renk</span>
+        <select id="adj-color" onchange="adjColorChange()"><option value="">— Seç —</option></select>
+      </div>
+      <div class="fg">
+        <span class="fl">Beden</span>
+        <select id="adj-size"><option value="">— Seç —</option></select>
+      </div>
+      <div class="fg">
+        <span class="fl">İşlem Tipi</span>
+        <select id="adj-type">
+          <option value="add">➕ Stok Ekle (iade / yeni mal)</option>
+          <option value="remove">➖ Stok Düş (manuel)</option>
+          <option value="set">✎ Direkt Ayarla</option>
+        </select>
+      </div>
+      <div class="fg">
+        <span class="fl">Miktar</span>
+        <input type="number" id="adj-qty" value="1" min="1">
+      </div>
+      <div class="fg" style="grid-column:span 2">
+        <span class="fl">Not (opsiyonel)</span>
+        <input type="text" id="adj-note" placeholder="ör: iade geldi, yeni parti...">
+      </div>
+    </div>
+    <div id="adj-current" style="font-size:12px;color:var(--tx3);margin-bottom:10px"></div>
+    <button class="btn bp" onclick="doAdjust()">Güncelle ve Tüm Firmalara Yansıt</button>
+  </div>
+  <div class="card" style="margin-top:4px">
+    <div class="ct">Son Manuel Güncellemeler</div>
+    <div class="tw"><table>
+      <thead><tr><th>Tarih</th><th>Ürün</th><th>İşlem</th><th>Miktar</th><th>Not</th></tr></thead>
+      <tbody id="adj-log-tbl"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- SİPARİŞLER -->
+<div id="orders" class="sec">
+  <div class="topbar">
+    <div class="pt">İşlenen Siparişler</div>
+    <button class="btn bg2b bsm" onclick="loadOrders()">↺ Yenile</button>
+  </div>
+  <div class="card">
+    <div class="tw"><table>
+      <thead><tr><th>Tarih</th><th>Firma</th><th>Sipariş No</th><th>Barcode</th><th>Eşleşme</th><th>Adet</th><th>Durum</th></tr></thead>
+      <tbody id="orders-tbl"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- LOGLAR -->
+<div id="logs" class="sec">
+  <div class="topbar">
+    <div class="pt">Sync Logları</div>
+    <button class="btn bg2b bsm" onclick="loadLogs()">↺ Yenile</button>
+  </div>
+  <div class="card">
+    <div class="tw"><table>
+      <thead><tr><th>Tarih</th><th>Firma</th><th>Barcode</th><th>İşlem</th><th>Yeni Stok</th><th>Mesaj</th><th>Durum</th></tr></thead>
+      <tbody id="logs-tbl"></tbody>
+    </table></div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<!-- MODALS -->
+
+<!-- Eşleştirme Modal -->
+<div id="mapping-modal" class="modal-overlay">
+  <div class="modal">
+    <div class="mhead"><div class="mtitle">Yeni Ürün Eşleştirme</div><button class="btn bg2b bsm" onclick="closeModal('mapping-modal')">✕</button></div>
+    <div class="mbody">
+      <div class="fg" style="margin-bottom:10px">
+        <span class="fl">Firma Seç</span>
+        <select id="map-firm" onchange="loadFirmProducts()"></select>
+      </div>
+      <div id="map-products-wrap" style="display:none">
+        <div class="fg" style="margin-bottom:10px">
+          <span class="fl">Trendyol Ürünü (Barcode)</span>
+          <select id="map-barcode" style="font-family:'DM Mono',monospace;font-size:12px"></select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+          <div class="fg">
+            <span class="fl">→ Depo Model</span>
+            <select id="map-depot-model" onchange="mapModelChange()"></select>
+          </div>
+          <div class="fg">
+            <span class="fl">→ Renk</span>
+            <select id="map-depot-color" onchange="mapColorChange()"></select>
+          </div>
+          <div class="fg">
+            <span class="fl">→ Beden</span>
+            <select id="map-depot-size"></select>
+          </div>
+        </div>
+      </div>
+      <div id="map-loading" style="display:none;text-align:center;padding:20px;color:var(--tx3)">
+        <div class="spinner" style="margin:0 auto 8px"></div>Trendyol'dan ürünler çekiliyor...
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn bg2b" onclick="closeModal('mapping-modal')">İptal</button>
+      <button class="btn bp" onclick="saveMapping()">Eşleştir</button>
+    </div>
+  </div>
+</div>
+
+<!-- Depo Ürün Modal -->
+<div id="depot-modal" class="modal-overlay">
+  <div class="modal">
+    <div class="mhead"><div class="mtitle">Depo Ürünü Ekle</div><button class="btn bg2b bsm" onclick="closeModal('depot-modal')">✕</button></div>
+    <div class="mbody">
+      <div class="fgrid">
+        <div class="fg"><span class="fl">Model Kodu</span><input type="text" id="dep-model" placeholder="PR1001" style="font-family:'DM Mono',monospace"></div>
+        <div class="fg"><span class="fl">Renk</span><input type="text" id="dep-color" placeholder="Siyah"></div>
+        <div class="fg"><span class="fl">Beden</span><input type="text" id="dep-size" placeholder="10-11"></div>
+        <div class="fg"><span class="fl">Başlangıç Stok</span><input type="number" id="dep-stock" value="0" min="0"></div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn bg2b" onclick="closeModal('depot-modal')">İptal</button>
+      <button class="btn bp" onclick="saveDepotProduct()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firma Modal -->
+<div id="firm-modal" class="modal-overlay">
+  <div class="modal">
+    <div class="mhead"><div class="mtitle" id="firm-modal-title">Firma Ekle</div><button class="btn bg2b bsm" onclick="closeModal('firm-modal')">✕</button></div>
+    <div class="mbody">
+      <div class="fgrid">
+        <div class="fg" style="grid-column:span 2"><span class="fl">Firma Adı</span><input type="text" id="firm-name" placeholder="BanaNeVar"></div>
+        <div class="fg" style="grid-column:span 2"><span class="fl">Supplier ID</span><input type="text" id="firm-sid" style="font-family:'DM Mono',monospace"></div>
+        <div class="fg"><span class="fl">API Key</span><input type="text" id="firm-key" style="font-family:'DM Mono',monospace"></div>
+        <div class="fg"><span class="fl">API Secret</span><input type="text" id="firm-secret" style="font-family:'DM Mono',monospace"></div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn bg2b" onclick="closeModal('firm-modal')">İptal</button>
+      <button class="btn bp" onclick="saveFirm()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let depotData = [], firmsData = [], mappingsData = [];
+
+// ================================================================
+//  NAVIGATION
+// ================================================================
+function go(id) {
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.ni').forEach(b=>b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelector(`.ni[onclick="go('${id}')"]`)?.classList.add('active');
+  if(id==='dashboard') loadDashboard();
+  if(id==='depot') loadDepot();
+  if(id==='mapping') { loadMappings(); loadFirmsForSelect(); }
+  if(id==='firms') loadFirms();
+  if(id==='adjust') loadAdjust();
+  if(id==='orders') loadOrders();
+  if(id==='logs') loadLogs();
+}
+
+// ================================================================
+//  API CALLS
+// ================================================================
+async function api(path, method='GET', body=null) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  return res.json();
+}
+
+function fmt(n) { return (+n).toLocaleString('tr-TR'); }
+function ago(dt) {
+  if(!dt) return '—';
+  const diff = Date.now() - new Date(dt).getTime();
+  const m = Math.floor(diff/60000);
+  if(m<1) return 'az önce';
+  if(m<60) return m+'dk önce';
+  return Math.floor(m/60)+'sa önce';
+}
+
+// ================================================================
+//  DASHBOARD
+// ================================================================
+async function loadDashboard() {
+  const [stats, firms, logs] = await Promise.all([
+    api('/api/stats'), api('/api/firms'), api('/api/logs')
+  ]);
+
+  document.getElementById('dash-metrics').innerHTML = `
+    <div class="mc hi"><div class="mcl">Toplam Depo Stok</div><div class="mcv">${fmt(stats.total_depot_stock)}</div><div class="mcs">tüm varyantlar</div></div>
+    <div class="mc gn"><div class="mcl">Aktif Firma</div><div class="mcv">${stats.active_firms}</div><div class="mcs">Trendyol mağaza</div></div>
+    <div class="mc bl"><div class="mcl">Eşleştirme</div><div class="mcv">${stats.mappings}</div><div class="mcs">ürün bağlantısı</div></div>
+    <div class="mc ${stats.errors_today>0?'rd':'gn'}"><div class="mcl">Bugün Sync</div><div class="mcv">${stats.syncs_today}</div><div class="mcs">${stats.errors_today} hata</div></div>
+  `;
+
+  document.getElementById('dash-firms').innerHTML = firms.map(f=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd)">
+      <div>
+        <div style="font-size:13px;font-weight:500">${f.name}</div>
+        <div style="font-size:11px;color:var(--tx3)">Son sync: ${ago(f.last_sync)}</div>
+      </div>
+      <span class="badge ${f.active?'b-ok':'b-err'}">${f.active?'Aktif':'Pasif'}</span>
+    </div>
+  `).join('') || '<div class="empty">Firma yok</div>';
+
+  const recentLogs = logs.slice(0,8);
+  document.getElementById('dash-logs').innerHTML = recentLogs.map(l=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd)">
+      <div>
+        <span style="font-size:11px;color:var(--tx3)">${l.firm_name}</span>
+        <span class="tag" style="margin:0 5px">${l.barcode||'—'}</span>
+        <span style="font-size:11px;color:var(--tx2)">→ ${l.new_stock} adet</span>
+      </div>
+      <span class="badge ${l.success?'b-ok':'b-err'}">${l.success?'OK':'HATA'}</span>
+    </div>
+  `).join('') || '<div class="empty">Henüz log yok</div>';
+
+  // Eşleştirilmemiş siparişler
+  const orders = await api('/api/orders');
+  const unmapped = orders.filter(o=>o.processed===-1);
+  document.getElementById('unmapped-count').textContent = unmapped.length ? `(${unmapped.length} adet)` : '';
+  document.getElementById('dash-unmapped').innerHTML = unmapped.length ? unmapped.slice(0,10).map(o=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12px">
+      <span style="color:var(--tx3)">${o.firm_name}</span>
+      <span class="tag">${o.barcode}</span>
+      <span style="color:var(--ye)">⚠ Eşleştirme gerekiyor</span>
+    </div>
+  `).join('') : '<div class="empty" style="padding:12px">Tüm ürünler eşleştirilmiş ✓</div>';
+}
+
+// ================================================================
+//  DEPO
+// ================================================================
+async function loadDepot() {
+  depotData = await api('/api/depot');
+  renderDepotTable(depotData);
+  populateAdjModels();
+}
+
+function renderDepotTable(data) {
+  document.getElementById('depot-tbl').innerHTML = data.map(p=>`
+    <tr>
+      <td style="font-family:'DM Mono',monospace;color:var(--ac)">${p.model}</td>
+      <td>${p.color}</td>
+      <td><span style="background:var(--bg3);padding:2px 7px;border-radius:5px;font-size:11px">${p.size}</span></td>
+      <td><b style="color:${p.stock<=0?'var(--re)':p.stock<=3?'var(--ye)':'var(--gr)';}">${p.stock}</b></td>
+      <td><span class="badge ${p.stock<=0?'b-err':p.stock<=3?'b-warn':'b-ok'}">${p.stock<=0?'Tükendi':p.stock<=3?'Kritik':'Yeterli'}</span></td>
+      <td>
+        <button class="btn bg2b bsm" onclick="quickSync('${p.model}','${p.color}','${p.size}')">↺ Sync</button>
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="6" class="empty">Ürün yok — Ekle butonunu kullan</td></tr>';
+}
+
+function filterDepot() {
+  const q = document.getElementById('depot-search').value.toLowerCase();
+  const filtered = depotData.filter(p=>(p.model+p.color+p.size).toLowerCase().includes(q));
+  renderDepotTable(filtered);
+}
+
+async function quickSync(model, color, size) {
+  await api('/api/sync/product', 'POST', {model, color, size});
+  toast('Sync gönderildi: '+model+' '+color+' '+size);
+}
+
+function openAddDepotModal() {
+  ['dep-model','dep-color','dep-size'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('dep-stock').value='0';
+  openModal('depot-modal');
+}
+
+async function saveDepotProduct() {
+  const model = document.getElementById('dep-model').value.trim();
+  const color = document.getElementById('dep-color').value.trim();
+  const size = document.getElementById('dep-size').value.trim();
+  const stock = +document.getElementById('dep-stock').value;
+  if(!model||!color||!size) return toast('Tüm alanları doldur');
+  await api('/api/depot','POST',{model,color,size,stock});
+  closeModal('depot-modal');
+  loadDepot();
+  toast('Ürün eklendi');
+}
+
+// ================================================================
+//  EŞLEŞTİRME
+// ================================================================
+async function loadMappings() {
+  const firmFilter = document.getElementById('mapping-firm-filter')?.value || '';
+  mappingsData = await api('/api/mappings');
+  const filtered = firmFilter ? mappingsData.filter(m=>m.firm_name===firmFilter) : mappingsData;
+  document.getElementById('mapping-cnt').textContent = filtered.length;
+  document.getElementById('mapping-tbl').innerHTML = filtered.map(m=>`
+    <tr>
+      <td>${m.firm_name}</td>
+      <td><span class="tag">${m.barcode}</span></td>
+      <td style="font-size:11px;color:var(--tx2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.product_title||'—'}</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--ac)">${m.depot_model}</td>
+      <td>${m.depot_color}</td>
+      <td>${m.depot_size}</td>
+      <td><button class="btn bdr bsm" onclick="deleteMapping(${m.id})">Sil</button></td>
+    </tr>
+  `).join('') || '<tr><td colspan="7" class="empty">Eşleştirme yok</td></tr>';
+}
+
+async function loadFirmsForSelect() {
+  firmsData = await api('/api/firms');
+  const sel = document.getElementById('mapping-firm-filter');
+  if(sel) sel.innerHTML='<option value="">Tüm firmalar</option>'+firmsData.map(f=>`<option value="${f.name}">${f.name}</option>`).join('');
+}
+
+function openMappingModal() {
+  document.getElementById('map-products-wrap').style.display='none';
+  document.getElementById('map-loading').style.display='none';
+  const sel = document.getElementById('map-firm');
+  sel.innerHTML = firmsData.map(f=>`<option value="${f.id}">${f.name}</option>`).join('');
+
+  // Depo model seçenekleri
+  const models = [...new Set(depotData.map(p=>p.model))];
+  document.getElementById('map-depot-model').innerHTML = models.map(m=>`<option>${m}</option>`).join('');
+  mapModelChange();
+
+  openModal('mapping-modal');
+}
+
+async function loadFirmProducts() {
+  const firmId = document.getElementById('map-firm').value;
+  document.getElementById('map-products-wrap').style.display='none';
+  document.getElementById('map-loading').style.display='block';
+  const products = await api(`/api/firms/${firmId}/products`);
+  document.getElementById('map-loading').style.display='none';
+  if(!products.length) { toast('Bu firmada ürün bulunamadı'); return; }
+  document.getElementById('map-barcode').innerHTML = products.map(p=>`<option value="${p.barcode}" data-title="${p.title||''}">${p.barcode} — ${(p.title||'').substring(0,40)}</option>`).join('');
+  document.getElementById('map-products-wrap').style.display='block';
+}
+
+function mapModelChange() {
+  const model = document.getElementById('map-depot-model').value;
+  const colors = [...new Set(depotData.filter(p=>p.model===model).map(p=>p.color))];
+  document.getElementById('map-depot-color').innerHTML = colors.map(c=>`<option>${c}</option>`).join('');
+  mapColorChange();
+}
+
+function mapColorChange() {
+  const model = document.getElementById('map-depot-model').value;
+  const color = document.getElementById('map-depot-color').value;
+  const sizes = depotData.filter(p=>p.model===model&&p.color===color).map(p=>p.size);
+  document.getElementById('map-depot-size').innerHTML = sizes.map(s=>`<option>${s}</option>`).join('');
+}
+
+async function saveMapping() {
+  const firmId = document.getElementById('map-firm').value;
+  const barcodeEl = document.getElementById('map-barcode');
+  const barcode = barcodeEl.value;
+  const title = barcodeEl.options[barcodeEl.selectedIndex]?.dataset.title || '';
+  const model = document.getElementById('map-depot-model').value;
+  const color = document.getElementById('map-depot-color').value;
+  const size = document.getElementById('map-depot-size').value;
+  if(!firmId||!barcode||!model||!color||!size) return toast('Eksik bilgi');
+  await api('/api/mappings','POST',{firm_id:+firmId, barcode, product_title:title, depot_model:model, depot_color:color, depot_size:size});
+  closeModal('mapping-modal');
+  loadMappings();
+  toast('Eşleştirme kaydedildi');
+}
+
+async function deleteMapping(id) {
+  if(!confirm('Bu eşleştirmeyi silmek istediğine emin misin?')) return;
+  await api(`/api/mappings/${id}`,'DELETE');
+  loadMappings();
+  toast('Silindi');
+}
+
+// ================================================================
+//  FİRMALAR
+// ================================================================
+async function loadFirms() {
+  firmsData = await api('/api/firms');
+  document.getElementById('firms-grid').innerHTML = firmsData.map(f=>`
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:15px;font-weight:600">${f.name}</div>
+        <span class="badge ${f.active?'b-ok':'b-err'}">${f.active?'Aktif':'Pasif'}</span>
+      </div>
+      <div style="font-size:12px;color:var(--tx3);margin-bottom:4px">Supplier ID</div>
+      <div class="tag" style="margin-bottom:10px">${f.supplier_id}</div>
+      <div style="font-size:11px;color:var(--tx3)">Son sync: ${ago(f.last_sync)}</div>
+      <div style="display:flex;gap:6px;margin-top:12px">
+        <button class="btn bg2b bsm" onclick="editFirm(${f.id})">Düzenle</button>
+        <button class="btn ${f.active?'bdr':'bp'} bsm" onclick="toggleFirm(${f.id},${f.active?0:1})">${f.active?'Pasifleştir':'Aktifleştir'}</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openFirmModal(firm=null) {
+  document.getElementById('firm-modal-title').textContent = firm?'Firma Düzenle':'Firma Ekle';
+  document.getElementById('firm-name').value = firm?.name||'';
+  document.getElementById('firm-sid').value = firm?.supplier_id||'';
+  document.getElementById('firm-key').value = '';
+  document.getElementById('firm-secret').value = '';
+  openModal('firm-modal');
+}
+
+let editingFirmId = null;
+function editFirm(id) {
+  editingFirmId = id;
+  const f = firmsData.find(x=>x.id===id);
+  openFirmModal(f);
+}
+
+async function saveFirm() {
+  const name = document.getElementById('firm-name').value.trim();
+  const supplier_id = document.getElementById('firm-sid').value.trim();
+  const api_key = document.getElementById('firm-key').value.trim();
+  const api_secret = document.getElementById('firm-secret').value.trim();
+  if(!name||!supplier_id) return toast('Firma adı ve Supplier ID zorunlu');
+  if(editingFirmId) {
+    await api(`/api/firms/${editingFirmId}`,'PATCH',{name, supplier_id, api_key:api_key||undefined, api_secret:api_secret||undefined});
+  } else {
+    if(!api_key||!api_secret) return toast('API Key ve Secret zorunlu');
+    await api('/api/firms','POST',{name, supplier_id, api_key, api_secret});
+  }
+  editingFirmId = null;
+  closeModal('firm-modal');
+  loadFirms();
+  toast('Kaydedildi');
+}
+
+async function toggleFirm(id, active) {
+  await api(`/api/firms/${id}`,'PATCH',{active});
+  loadFirms();
+}
+
+// ================================================================
+//  STOK DÜZENLE
+// ================================================================
+function populateAdjModels() {
+  const models = [...new Set(depotData.map(p=>p.model))];
+  document.getElementById('adj-model').innerHTML = '<option value="">— Seç —</option>'+models.map(m=>`<option>${m}</option>`).join('');
+}
+
+function adjModelChange() {
+  const model = document.getElementById('adj-model').value;
+  const colors = [...new Set(depotData.filter(p=>p.model===model).map(p=>p.color))];
+  document.getElementById('adj-color').innerHTML = '<option value="">— Seç —</option>'+colors.map(c=>`<option>${c}</option>`).join('');
+  adjColorChange();
+}
+
+function adjColorChange() {
+  const model = document.getElementById('adj-model').value;
+  const color = document.getElementById('adj-color').value;
+  const sizes = depotData.filter(p=>p.model===model&&p.color===color).map(p=>p.size);
+  document.getElementById('adj-size').innerHTML = '<option value="">— Seç —</option>'+sizes.map(s=>`<option>${s}</option>`).join('');
+  const p = depotData.find(x=>x.model===model&&x.color===color);
+  if(p) document.getElementById('adj-current').textContent='';
+}
+
+async function doAdjust() {
+  const model = document.getElementById('adj-model').value;
+  const color = document.getElementById('adj-color').value;
+  const size = document.getElementById('adj-size').value;
+  const type = document.getElementById('adj-type').value;
+  const qty = +document.getElementById('adj-qty').value;
+  const note = document.getElementById('adj-note').value;
+  if(!model||!color||!size) return toast('Model, renk ve beden seç');
+  if(!qty||qty<1) return toast('Geçerli bir miktar gir');
+  const r = await api('/api/depot/adjust','POST',{model,color,size,type,qty,note});
+  if(r.ok) {
+    toast(`Güncellendi → Yeni stok: ${r.new_stock}`);
+    loadDepot();
+    loadAdjustLog();
+  } else {
+    toast('Hata: '+(r.error||'bilinmiyor'));
+  }
+}
+
+async function loadAdjust() {
+  if(!depotData.length) await loadDepot();
+  populateAdjModels();
+  loadAdjustLog();
+}
+
+async function loadAdjustLog() {
+  const logs = await api('/api/logs');
+  const manuals = logs.filter(l=>l.action==='manual_sync').slice(0,20);
+  document.getElementById('adj-log-tbl').innerHTML = manuals.map(l=>`
+    <tr>
+      <td style="font-size:11px;color:var(--tx3)">${new Date(l.created_at).toLocaleString('tr-TR')}</td>
+      <td><span class="tag">${l.barcode||'—'}</span></td>
+      <td>${l.action==='manual_sync'?'Manuel':'Sipariş'}</td>
+      <td><b>${l.new_stock}</b></td>
+      <td style="color:var(--tx2);font-size:12px">${l.message||'—'}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="5" class="empty">Henüz işlem yok</td></tr>';
+}
+
+// ================================================================
+//  SİPARİŞLER
+// ================================================================
+async function loadOrders() {
+  const orders = await api('/api/orders');
+  document.getElementById('orders-tbl').innerHTML = orders.map(o=>`
+    <tr>
+      <td style="font-size:11px;color:var(--tx3)">${new Date(o.created_at).toLocaleString('tr-TR')}</td>
+      <td>${o.firm_name}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px">${o.order_number}</td>
+      <td><span class="tag">${o.barcode}</span></td>
+      <td>${o.depot_model?`<span style="color:var(--gr)">✓ ${o.depot_model} ${o.depot_color} ${o.depot_size}</span>`:'<span style="color:var(--re)">⚠ Eşleştirme yok</span>'}</td>
+      <td>${o.qty}</td>
+      <td><span class="badge ${o.processed===1?'b-ok':o.processed===-1?'b-err':'b-warn'}">${o.processed===1?'İşlendi':o.processed===-1?'Eşleşmedi':'Bekliyor'}</span></td>
+    </tr>
+  `).join('') || '<tr><td colspan="7" class="empty">Sipariş yok</td></tr>';
+}
+
+// ================================================================
+//  LOGLAR
+// ================================================================
+async function loadLogs() {
+  const logs = await api('/api/logs');
+  document.getElementById('logs-tbl').innerHTML = logs.map(l=>`
+    <tr>
+      <td style="font-size:11px;color:var(--tx3)">${new Date(l.created_at).toLocaleString('tr-TR')}</td>
+      <td>${l.firm_name||'—'}</td>
+      <td><span class="tag">${l.barcode||'—'}</span></td>
+      <td style="font-size:11px">${l.action}</td>
+      <td><b>${l.new_stock??'—'}</b></td>
+      <td style="font-size:11px;color:var(--tx2)">${l.message||'—'}</td>
+      <td><span class="badge ${l.success?'b-ok':'b-err'}">${l.success?'OK':'HATA'}</span></td>
+    </tr>
+  `).join('') || '<tr><td colspan="7" class="empty">Log yok</td></tr>';
+}
+
+// ================================================================
+//  MANUEL SYNC
+// ================================================================
+async function manualSync() {
+  document.getElementById('sync-status').innerHTML = '<span class="spinner"></span> Sync çalışıyor...';
+  await api('/api/sync/run','POST');
+  setTimeout(()=>{
+    document.getElementById('sync-status').innerHTML = '<span class="dot-live"></span> Sistem aktif';
+    toast('Sync tamamlandı');
+    loadDashboard();
+  }, 3000);
+}
+
+// ================================================================
+//  MODAL HELPERS
+// ================================================================
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('open'); });
+});
+
+// ================================================================
+//  TOAST
+// ================================================================
+function toast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText='position:fixed;bottom:20px;right:20px;background:var(--bg4);border:1px solid var(--bd2);border-radius:10px;padding:10px 16px;font-size:13px;color:var(--tx);z-index:999;animation:su .25s ease;box-shadow:0 8px 32px rgba(0,0,0,.5)';
+  t.innerHTML = '<style>@keyframes su{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}</style>'+msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),3000);
+}
+
+// ================================================================
+//  INIT
+// ================================================================
+loadDashboard();
+
+// Her 2 dakikada dashboard'u yenile
+setInterval(()=>{ if(document.getElementById('dashboard').classList.contains('active')) loadDashboard(); }, 120000);
+</script>
+</body>
+</html>
