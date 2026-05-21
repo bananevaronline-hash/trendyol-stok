@@ -113,10 +113,18 @@ loadFirmsFromEnv();
 // ================================================================
 function trendyolHeaders(apiKey, apiSecret, supplierId) {
   const token = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+  // Trendyol requires exact format: "SupplierId - SelfIntegration"
+  const supplierMap = {
+    '451584': '451584 - SelfIntegration',
+    '1149690': '1149690 - SelfIntegration',
+    '1148836': '1148836 - SelfIntegration',
+    '1243080': '1243080 - SelfIntegration'
+  };
+  const userAgent = supplierMap[String(supplierId)] || `${supplierId} - SelfIntegration`;
   return {
     'Authorization': `Basic ${token}`,
     'Content-Type': 'application/json',
-    'User-Agent': `${supplierId} - SelfIntegration`
+    'User-Agent': userAgent
   };
 }
 
