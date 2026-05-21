@@ -386,8 +386,11 @@ let depotData = [], firmsData = [], mappingsData = [];
 function go(id) {
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(b=>b.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  document.querySelector(`.ni[onclick="go('${id}')"]`)?.classList.add('active');
+  const sec = document.getElementById(id);
+  if(sec) sec.classList.add('active');
+  document.querySelectorAll('.ni').forEach(b=>{
+    if(b.getAttribute('onclick')==="go('"+id+"')") b.classList.add('active');
+  });
   if(id==='dashboard') loadDashboard();
   if(id==='depot') loadDepot();
   if(id==='mapping') { loadMappings(); loadFirmsForSelect(); }
