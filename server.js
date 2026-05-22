@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const cron = require('node-cron');
-const Database = require('better-sqlite3');
+const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const path = require('path');
 
@@ -14,10 +14,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ================================================================
 //  VERİTABANI KURULUMU
 // ================================================================
-const db = new Database('stok.db');
+const db = new sqlite3.Database('stok.db');
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS firms (
+const run = (sql, params=[]) => new Promise((res,rej) => db.run(sql, params, function(e){ if(e) rej(e); else res(this); }));
+const get = (sql, params=[]) => new Promise((res,rej) => db.get(sql, params, (e,r) => e ? rej(e) : res(r)));
+const all = (sql, params=[]) => new Promise((res,rej) => db.all(sql, params, (e,r) => e ? rej(e) : res(r||[])));
+
+async function initDB() {
+  await run(`CREATE TABLE IF NOT EXISTS firms (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT UNIQUE NOT NULL,
     supplier_id TEXT NOT NULL,
@@ -26,18 +30,16 @@ db.exec(`
     active INTEGER DEFAULT 1,
     last_sync TEXT,
     created_at TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS depot_products (
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS depot_products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     model TEXT NOT NULL,
     color TEXT NOT NULL,
     size TEXT NOT NULL,
     stock INTEGER DEFAULT 0,
     UNIQUE(model, color, size)
-  );
-
-  CREATE TABLE IF NOT EXISTS mappings (
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS mappings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     firm_id INTEGER NOT NULL,
     firm_name TEXT NOT NULL,
@@ -48,11 +50,9 @@ db.exec(`
     depot_size TEXT NOT NULL,
     active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now')),
-    UNIQUE(firm_id, barcode),
-    FOREIGN KEY(firm_id) REFERENCES firms(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS sync_log (
+    UNIQUE(firm_id, barcode)
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS sync_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     firm_name TEXT,
     barcode TEXT,
@@ -62,9 +62,8 @@ db.exec(`
     message TEXT,
     success INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS manual_adjustments (
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS manual_adjustments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     depot_model TEXT NOT NULL,
     depot_color TEXT NOT NULL,
@@ -73,9 +72,8 @@ db.exec(`
     qty INTEGER NOT NULL,
     note TEXT,
     created_at TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS orders (
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     firm_name TEXT NOT NULL,
     order_number TEXT NOT NULL,
@@ -89,11 +87,12 @@ db.exec(`
     processed INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(firm_name, order_number, barcode)
-  );
-`);
+  )`);
+  console.log('Veritabanı hazır');
+  await loadFirmsFromEnv();
+}
 
-// .env'den firma bilgilerini yükle
-function loadFirmsFromEnv() {
+async function loadFirmsFromEnv() {
   for (let i = 1; i <= 4; i++) {
     const name = process.env[`FIRM${i}_NAME`];
     const supplier_id = process.env[`FIRM${i}_SUPPLIER_ID`];
@@ -101,36 +100,26 @@ function loadFirmsFromEnv() {
     const api_secret = process.env[`FIRM${i}_API_SECRET`];
     if (name && supplier_id && api_key && api_secret) {
       try {
-        db.prepare(`INSERT OR IGNORE INTO firms (name, supplier_id, api_key, api_secret) VALUES (?, ?, ?, ?)`).run(name, supplier_id, api_key, api_secret);
+        await run(`INSERT OR IGNORE INTO firms (name, supplier_id, api_key, api_secret) VALUES (?, ?, ?, ?)`, [name, supplier_id, api_key, api_secret]);
       } catch(e) {}
     }
   }
 }
-loadFirmsFromEnv();
 
 // ================================================================
-//  TRENDYOL API HELPERs
+//  TRENDYOL API
 // ================================================================
+const BASE_URL = 'https://api.trendyol.com/sapigw/suppliers';
+
 function trendyolHeaders(apiKey, apiSecret, supplierId) {
   const token = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
-  // Trendyol requires exact format: "SupplierId - SelfIntegration"
-  const supplierMap = {
-    '451584': '451584 - SelfIntegration',
-    '1149690': '1149690 - SelfIntegration',
-    '1148836': '1148836 - SelfIntegration',
-    '1243080': '1243080 - SelfIntegration'
-  };
-  const userAgent = supplierMap[String(supplierId)] || `${supplierId} - SelfIntegration`;
   return {
     'Authorization': `Basic ${token}`,
     'Content-Type': 'application/json',
-    'User-Agent': userAgent
+    'User-Agent': `${supplierId} - SelfIntegration`
   };
 }
 
-const BASE_URL = 'https://api.trendyol.com/sapigw/suppliers';
-
-// Firmanın ürünlerini çek (sayfalı)
 async function fetchFirmProducts(firm) {
   const products = [];
   let page = 0;
@@ -138,24 +127,20 @@ async function fetchFirmProducts(firm) {
   try {
     while (true) {
       const url = `${BASE_URL}/${firm.supplier_id}/products?page=${page}&size=${size}&approved=true`;
-      const headers = trendyolHeaders(firm.api_key, firm.api_secret, firm.supplier_id);
-      console.log(`[${firm.name}] URL: ${url}`);
-      console.log(`[${firm.name}] User-Agent: ${headers['User-Agent']}`);
-      console.log(`[${firm.name}] Auth: ${headers['Authorization'].substring(0, 20)}...`);
       const res = await axios.get(url, {
-        headers,
-        timeout: 15000
+        headers: trendyolHeaders(firm.api_key, firm.api_secret, firm.supplier_id),
+        timeout: 15000,
+        validateStatus: () => true
       });
+      if (res.status !== 200) {
+        console.error(`[${firm.name}] Ürün çekme hatası: ${res.status} - ${JSON.stringify(res.data).substring(0,200)}`);
+        break;
+      }
       const content = res.data?.content || [];
       if (content.length === 0) break;
       for (const p of content) {
         for (const v of (p.variants || [])) {
-          products.push({
-            barcode: v.barcode,
-            title: p.title,
-            stock: v.quantity || 0,
-            product_main_id: p.productMainId
-          });
+          products.push({ barcode: v.barcode, title: p.title, stock: v.quantity || 0 });
         }
       }
       if (content.length < size) break;
@@ -167,16 +152,20 @@ async function fetchFirmProducts(firm) {
   return products;
 }
 
-// Firmanın son siparişlerini çek
 async function fetchNewOrders(firm) {
   try {
     const now = Date.now();
-    const from = now - (10 * 60 * 1000); // son 10 dakika
+    const from = now - (10 * 60 * 1000);
     const url = `${BASE_URL}/${firm.supplier_id}/orders?status=Created&orderByField=PackageLastModifiedDate&orderByDirection=DESC&startDate=${from}&endDate=${now}&size=200`;
     const res = await axios.get(url, {
       headers: trendyolHeaders(firm.api_key, firm.api_secret, firm.supplier_id),
-      timeout: 15000
+      timeout: 15000,
+      validateStatus: () => true
     });
+    if (res.status !== 200) {
+      console.error(`[${firm.name}] Sipariş çekme hatası: ${res.status}`);
+      return [];
+    }
     return res.data?.content || [];
   } catch (e) {
     console.error(`[${firm.name}] Sipariş çekme hatası:`, e.message);
@@ -184,17 +173,10 @@ async function fetchNewOrders(firm) {
   }
 }
 
-// Trendyol'a stok güncelleme gönder
 async function updateTrendyolStock(firm, barcode, qty) {
   try {
     const url = `${BASE_URL}/${firm.supplier_id}/products/price-and-inventory`;
-    const payload = {
-      items: [{
-        barcode: barcode,
-        quantity: Math.max(0, qty)
-      }]
-    };
-    await axios.post(url, payload, {
+    await axios.post(url, { items: [{ barcode, quantity: Math.max(0, qty) }] }, {
       headers: trendyolHeaders(firm.api_key, firm.api_secret, firm.supplier_id),
       timeout: 15000
     });
@@ -206,303 +188,223 @@ async function updateTrendyolStock(firm, barcode, qty) {
 }
 
 // ================================================================
-//  ANA SENKRONIZASYON MOTORU
+//  SENKRONIZASYON
 // ================================================================
 let isSyncing = false;
 
-async function runSync() {
-  if (isSyncing) {
-    console.log('[SYNC] Önceki sync hâlâ devam ediyor, atlanıyor...');
-    return;
+async function syncStockToAllFirms(model, color, size, newStock, note='') {
+  const firms = await all('SELECT * FROM firms WHERE active=1');
+  for (const firm of firms) {
+    const maps = await all('SELECT * FROM mappings WHERE firm_id=? AND depot_model=? AND depot_color=? AND depot_size=? AND active=1', [firm.id, model, color, size]);
+    for (const m of maps) {
+      const success = await updateTrendyolStock(firm, m.barcode, newStock);
+      await run('INSERT INTO sync_log (firm_name, barcode, action, new_stock, message, success) VALUES (?, ?, ?, ?, ?, ?)',
+        [firm.name, m.barcode, 'sync', newStock, note, success ? 1 : 0]);
+    }
   }
+}
+
+async function runSync() {
+  if (isSyncing) return;
   isSyncing = true;
   console.log(`[SYNC] Başladı — ${new Date().toLocaleString('tr-TR')}`);
-
-  const firms = db.prepare('SELECT * FROM firms WHERE active = 1').all();
-
+  const firms = await all('SELECT * FROM firms WHERE active=1');
   for (const firm of firms) {
     try {
-      // Siparişleri çek
       const orders = await fetchNewOrders(firm);
-
       for (const order of orders) {
         for (const line of (order.lines || [])) {
           const barcode = line.barcode;
           const qty = line.quantity || 1;
           const orderNumber = String(order.orderNumber || order.id);
-
-          // Daha önce işlendi mi?
-          const exists = db.prepare('SELECT id FROM orders WHERE firm_name=? AND order_number=? AND barcode=?').get(firm.name, orderNumber, barcode);
+          const exists = await get('SELECT id FROM orders WHERE firm_name=? AND order_number=? AND barcode=?', [firm.name, orderNumber, barcode]);
           if (exists) continue;
-
-          // Eşleştirme var mı?
-          const mapping = db.prepare('SELECT * FROM mappings WHERE firm_id=? AND barcode=? AND active=1').get(firm.id, barcode);
-
-          db.prepare(`INSERT OR IGNORE INTO orders (firm_name, order_number, barcode, depot_model, depot_color, depot_size, qty, status, order_date, processed)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-            firm.name, orderNumber, barcode,
-            mapping?.depot_model || null,
-            mapping?.depot_color || null,
-            mapping?.depot_size || null,
-            qty, order.status || 'Created',
-            order.orderDate || new Date().toISOString(),
-            mapping ? 0 : -1 // -1 = eşleştirme yok
-          );
-
-          if (!mapping) {
-            console.log(`[${firm.name}] Eşleştirme yok: ${barcode}`);
-            continue;
-          }
-
-          // Depo stokunu düş
-          const depot = db.prepare('SELECT * FROM depot_products WHERE model=? AND color=? AND size=?').get(mapping.depot_model, mapping.depot_color, mapping.depot_size);
+          const mapping = await get('SELECT * FROM mappings WHERE firm_id=? AND barcode=? AND active=1', [firm.id, barcode]);
+          await run(`INSERT OR IGNORE INTO orders (firm_name, order_number, barcode, depot_model, depot_color, depot_size, qty, status, order_date, processed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [firm.name, orderNumber, barcode, mapping?.depot_model||null, mapping?.depot_color||null, mapping?.depot_size||null, qty, order.status||'Created', order.orderDate||new Date().toISOString(), mapping ? 0 : -1]);
+          if (!mapping) { console.log(`[${firm.name}] Eşleştirme yok: ${barcode}`); continue; }
+          const depot = await get('SELECT * FROM depot_products WHERE model=? AND color=? AND size=?', [mapping.depot_model, mapping.depot_color, mapping.depot_size]);
           if (!depot) continue;
-
           const newStock = Math.max(0, depot.stock - qty);
-          db.prepare('UPDATE depot_products SET stock=? WHERE model=? AND color=? AND size=?').run(newStock, mapping.depot_model, mapping.depot_color, mapping.depot_size);
-
-          // Tüm firmalara güncelle
-          await syncStockToAllFirms(mapping.depot_model, mapping.depot_color, mapping.depot_size, newStock, firm.name, orderNumber);
-
-          // Siparişi işlendi olarak işaretle
-          db.prepare('UPDATE orders SET processed=1 WHERE firm_name=? AND order_number=? AND barcode=?').run(firm.name, orderNumber, barcode);
-
+          await run('UPDATE depot_products SET stock=? WHERE model=? AND color=? AND size=?', [newStock, mapping.depot_model, mapping.depot_color, mapping.depot_size]);
+          await syncStockToAllFirms(mapping.depot_model, mapping.depot_color, mapping.depot_size, newStock, `Sipariş: ${orderNumber}`);
+          await run('UPDATE orders SET processed=1 WHERE firm_name=? AND order_number=? AND barcode=?', [firm.name, orderNumber, barcode]);
           console.log(`[${firm.name}] Sipariş işlendi: ${barcode} — Yeni stok: ${newStock}`);
         }
       }
-
-      db.prepare('UPDATE firms SET last_sync=? WHERE id=?').run(new Date().toISOString(), firm.id);
-
+      await run('UPDATE firms SET last_sync=? WHERE id=?', [new Date().toISOString(), firm.id]);
     } catch (e) {
       console.error(`[${firm.name}] Sync hatası:`, e.message);
     }
   }
-
   isSyncing = false;
   console.log(`[SYNC] Tamamlandı — ${new Date().toLocaleString('tr-TR')}`);
 }
 
-// Tüm firmalara belirli bir ürünün stokunu güncelle
-async function syncStockToAllFirms(model, color, size, newStock, skipFirmName = null, note = '') {
-  const firms = db.prepare('SELECT * FROM firms WHERE active = 1').all();
-  for (const firm of firms) {
-    const mappings = db.prepare('SELECT * FROM mappings WHERE firm_id=? AND depot_model=? AND depot_color=? AND depot_size=? AND active=1').all(firm.id, model, color, size);
-    for (const m of mappings) {
-      const success = await updateTrendyolStock(firm, m.barcode, newStock);
-      db.prepare('INSERT INTO sync_log (firm_name, barcode, action, new_stock, message, success) VALUES (?, ?, ?, ?, ?, ?)').run(
-        firm.name, m.barcode, skipFirmName ? 'order_sync' : 'manual_sync', newStock,
-        skipFirmName ? `Sipariş: ${note}` : note, success ? 1 : 0
-      );
-    }
-  }
-}
-
 // ================================================================
-//  CRON — Her 3 dakikada çalış
+//  CRON
 // ================================================================
 const interval = process.env.SYNC_INTERVAL_MINUTES || 3;
 cron.schedule(`*/${interval} * * * *`, runSync);
-
-// İlk çalıştırma (30 saniye sonra)
 setTimeout(runSync, 30000);
 
 // ================================================================
 //  API ROUTES
 // ================================================================
 
-
-// Test endpoint - Trendyol API doğrudan test
-app.post('/api/test-trendyol', async (req, res) => {
-  const { supplier_id, api_key, api_secret } = req.body;
-  if (!supplier_id || !api_key || !api_secret) return res.json({ error: 'Eksik bilgi' });
-  try {
-    const token = Buffer.from(`${api_key}:${api_secret}`).toString('base64');
-    const userAgent = `${supplier_id} - SelfIntegration`;
-    const url = `https://api.trendyol.com/sapigw/suppliers/${supplier_id}/products?page=0&size=1&approved=true`;
-    const response = await axios.get(url, {
-      headers: {
-        'Authorization': `Basic ${token}`,
-        'Content-Type': 'application/json',
-        'User-Agent': userAgent
-      },
-      timeout: 15000,
-      validateStatus: () => true // her status kodu dönsün
-    });
-    res.json({
-      status: response.status,
-      statusText: response.statusText,
-      user_agent_sent: userAgent,
-      auth_prefix: `Basic ${token.substring(0, 20)}...`,
-      data: response.data
-    });
-  } catch (e) {
-    res.json({ error: e.message });
-  }
-});
-
-// Sağlık kontrolü
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString(), syncing: isSyncing });
 });
 
-// Firmalar
-app.get('/api/firms', (req, res) => {
-  const firms = db.prepare('SELECT id, name, supplier_id, active, last_sync FROM firms').all();
+app.get('/api/firms', async (req, res) => {
+  const firms = await all('SELECT id, name, supplier_id, active, last_sync FROM firms');
   res.json(firms);
 });
 
-app.post('/api/firms', (req, res) => {
+app.post('/api/firms', async (req, res) => {
   const { name, supplier_id, api_key, api_secret } = req.body;
   if (!name || !supplier_id || !api_key || !api_secret) return res.status(400).json({ error: 'Eksik bilgi' });
   try {
-    const r = db.prepare('INSERT OR REPLACE INTO firms (name, supplier_id, api_key, api_secret) VALUES (?, ?, ?, ?)').run(name, supplier_id, api_key, api_secret);
-    res.json({ id: r.lastInsertRowid, name });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+    const r = await run('INSERT OR REPLACE INTO firms (name, supplier_id, api_key, api_secret) VALUES (?, ?, ?, ?)', [name, supplier_id, api_key, api_secret]);
+    res.json({ id: r.lastID, name });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.patch('/api/firms/:id', (req, res) => {
+app.patch('/api/firms/:id', async (req, res) => {
   const { name, supplier_id, api_key, api_secret, active } = req.body;
-  const firm = db.prepare('SELECT * FROM firms WHERE id=?').get(req.params.id);
+  const firm = await get('SELECT * FROM firms WHERE id=?', [req.params.id]);
   if (!firm) return res.status(404).json({ error: 'Firma bulunamadı' });
-  db.prepare('UPDATE firms SET name=COALESCE(?,name), supplier_id=COALESCE(?,supplier_id), api_key=COALESCE(?,api_key), api_secret=COALESCE(?,api_secret), active=COALESCE(?,active) WHERE id=?')
-    .run(name, supplier_id, api_key, api_secret, active, req.params.id);
+  await run('UPDATE firms SET name=COALESCE(?,name), supplier_id=COALESCE(?,supplier_id), api_key=COALESCE(?,api_key), api_secret=COALESCE(?,api_secret), active=COALESCE(?,active) WHERE id=?',
+    [name||null, supplier_id||null, api_key||null, api_secret||null, active??null, req.params.id]);
   res.json({ ok: true });
 });
 
-// Firma ürünlerini Trendyol'dan çek
 app.get('/api/firms/:id/products', async (req, res) => {
-  const firm = db.prepare('SELECT * FROM firms WHERE id=?').get(req.params.id);
+  const firm = await get('SELECT * FROM firms WHERE id=?', [req.params.id]);
   if (!firm) return res.status(404).json({ error: 'Firma bulunamadı' });
   const products = await fetchFirmProducts(firm);
   res.json(products);
 });
 
-// Depo ürünleri
-app.get('/api/depot', (req, res) => {
-  const products = db.prepare('SELECT * FROM depot_products ORDER BY model, color, size').all();
+app.get('/api/depot', async (req, res) => {
+  const products = await all('SELECT * FROM depot_products ORDER BY model, color, size');
   res.json(products);
 });
 
-app.post('/api/depot', (req, res) => {
+app.post('/api/depot', async (req, res) => {
   const { model, color, size, stock } = req.body;
   if (!model || !color || !size) return res.status(400).json({ error: 'Eksik bilgi' });
   try {
-    db.prepare('INSERT OR REPLACE INTO depot_products (model, color, size, stock) VALUES (?, ?, ?, ?)').run(model, color, size, stock || 0);
+    await run('INSERT OR REPLACE INTO depot_products (model, color, size, stock) VALUES (?, ?, ?, ?)', [model, color, size, stock||0]);
     res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Toplu depo ürünü ekle (panelden import)
-app.post('/api/depot/bulk', (req, res) => {
-  const { products } = req.body;
-  if (!Array.isArray(products)) return res.status(400).json({ error: 'Geçersiz veri' });
-  const insert = db.prepare('INSERT OR REPLACE INTO depot_products (model, color, size, stock) VALUES (?, ?, ?, ?)');
-  const tx = db.transaction((items) => { for (const p of items) insert.run(p.model, p.color, p.size, p.stock || 0); });
-  tx(products);
-  res.json({ ok: true, count: products.length });
-});
-
-// Manuel stok ayarı (iade / yeni mal)
 app.post('/api/depot/adjust', async (req, res) => {
   const { model, color, size, type, qty, note } = req.body;
-  // type: 'add' (iade/yeni mal) veya 'set' (manuel set)
-  const depot = db.prepare('SELECT * FROM depot_products WHERE model=? AND color=? AND size=?').get(model, color, size);
+  const depot = await get('SELECT * FROM depot_products WHERE model=? AND color=? AND size=?', [model, color, size]);
   if (!depot) return res.status(404).json({ error: 'Ürün bulunamadı' });
-
   let newStock;
   if (type === 'set') newStock = qty;
   else if (type === 'add') newStock = depot.stock + qty;
   else if (type === 'remove') newStock = Math.max(0, depot.stock - qty);
   else return res.status(400).json({ error: 'Geçersiz tip' });
-
-  db.prepare('UPDATE depot_products SET stock=? WHERE model=? AND color=? AND size=?').run(newStock, model, color, size);
-  db.prepare('INSERT INTO manual_adjustments (depot_model, depot_color, depot_size, adjustment_type, qty, note) VALUES (?, ?, ?, ?, ?, ?)').run(model, color, size, type, qty, note || '');
-
-  // Tüm firmalara güncelle
-  await syncStockToAllFirms(model, color, size, newStock, null, note || 'Manuel güncelleme');
-
+  await run('UPDATE depot_products SET stock=? WHERE model=? AND color=? AND size=?', [newStock, model, color, size]);
+  await run('INSERT INTO manual_adjustments (depot_model, depot_color, depot_size, adjustment_type, qty, note) VALUES (?, ?, ?, ?, ?, ?)', [model, color, size, type, qty, note||'']);
+  await syncStockToAllFirms(model, color, size, newStock, note||'Manuel güncelleme');
   res.json({ ok: true, new_stock: newStock });
 });
 
-// Eşleştirmeler
-app.get('/api/mappings', (req, res) => {
-  const mappings = db.prepare('SELECT m.*, f.name as firm_name FROM mappings m JOIN firms f ON m.firm_id=f.id ORDER BY m.firm_name, m.depot_model').all();
+app.get('/api/mappings', async (req, res) => {
+  const mappings = await all('SELECT m.*, f.name as firm_name FROM mappings m JOIN firms f ON m.firm_id=f.id ORDER BY m.firm_name, m.depot_model');
   res.json(mappings);
 });
 
-app.post('/api/mappings', (req, res) => {
+app.post('/api/mappings', async (req, res) => {
   const { firm_id, barcode, product_title, depot_model, depot_color, depot_size } = req.body;
   if (!firm_id || !barcode || !depot_model || !depot_color || !depot_size) return res.status(400).json({ error: 'Eksik bilgi' });
-  const firm = db.prepare('SELECT * FROM firms WHERE id=?').get(firm_id);
+  const firm = await get('SELECT * FROM firms WHERE id=?', [firm_id]);
   if (!firm) return res.status(404).json({ error: 'Firma bulunamadı' });
   try {
-    db.prepare('INSERT OR REPLACE INTO mappings (firm_id, firm_name, barcode, product_title, depot_model, depot_color, depot_size) VALUES (?, ?, ?, ?, ?, ?, ?)').run(firm_id, firm.name, barcode, product_title || '', depot_model, depot_color, depot_size);
+    await run('INSERT OR REPLACE INTO mappings (firm_id, firm_name, barcode, product_title, depot_model, depot_color, depot_size) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [firm_id, firm.name, barcode, product_title||'', depot_model, depot_color, depot_size]);
     res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/mappings/:id', (req, res) => {
-  db.prepare('UPDATE mappings SET active=0 WHERE id=?').run(req.params.id);
+app.delete('/api/mappings/:id', async (req, res) => {
+  await run('UPDATE mappings SET active=0 WHERE id=?', [req.params.id]);
   res.json({ ok: true });
 });
 
-// Sync log
-app.get('/api/logs', (req, res) => {
-  const logs = db.prepare('SELECT * FROM sync_log ORDER BY created_at DESC LIMIT 200').all();
+app.get('/api/logs', async (req, res) => {
+  const logs = await all('SELECT * FROM sync_log ORDER BY created_at DESC LIMIT 200');
   res.json(logs);
 });
 
-// Manuel sync tetikle
 app.post('/api/sync/run', async (req, res) => {
   res.json({ ok: true, message: 'Sync başlatıldı' });
   runSync();
 });
 
-// Siparişler
-app.get('/api/orders', (req, res) => {
-  const orders = db.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT 500').all();
+app.get('/api/orders', async (req, res) => {
+  const orders = await all('SELECT * FROM orders ORDER BY created_at DESC LIMIT 500');
   res.json(orders);
 });
 
-// Tüm firmalara belirli ürünün stokunu zorla güncelle
 app.post('/api/sync/product', async (req, res) => {
   const { model, color, size } = req.body;
-  const depot = db.prepare('SELECT * FROM depot_products WHERE model=? AND color=? AND size=?').get(model, color, size);
+  const depot = await get('SELECT * FROM depot_products WHERE model=? AND color=? AND size=?', [model, color, size]);
   if (!depot) return res.status(404).json({ error: 'Ürün bulunamadı' });
-  await syncStockToAllFirms(model, color, size, depot.stock, null, 'Manuel ürün sync');
+  await syncStockToAllFirms(model, color, size, depot.stock, 'Manuel ürün sync');
   res.json({ ok: true, synced_stock: depot.stock });
 });
 
-// Özet istatistikler
-app.get('/api/stats', (req, res) => {
-  const totalDepot = db.prepare('SELECT SUM(stock) as total FROM depot_products').get();
-  const firmCount = db.prepare('SELECT COUNT(*) as c FROM firms WHERE active=1').get();
-  const mappingCount = db.prepare('SELECT COUNT(*) as c FROM mappings WHERE active=1').get();
-  const todayLogs = db.prepare("SELECT COUNT(*) as c FROM sync_log WHERE date(created_at)=date('now')").get();
-  const errorLogs = db.prepare("SELECT COUNT(*) as c FROM sync_log WHERE success=0 AND date(created_at)=date('now')").get();
-  const lastSync = db.prepare('SELECT MAX(last_sync) as ls FROM firms').get();
+app.get('/api/stats', async (req, res) => {
+  const totalDepot = await get('SELECT SUM(stock) as total FROM depot_products');
+  const firmCount = await get('SELECT COUNT(*) as c FROM firms WHERE active=1');
+  const mappingCount = await get('SELECT COUNT(*) as c FROM mappings WHERE active=1');
+  const todayLogs = await get("SELECT COUNT(*) as c FROM sync_log WHERE date(created_at)=date('now')");
+  const errorLogs = await get("SELECT COUNT(*) as c FROM sync_log WHERE success=0 AND date(created_at)=date('now')");
+  const lastSync = await get('SELECT MAX(last_sync) as ls FROM firms');
   res.json({
-    total_depot_stock: totalDepot?.total || 0,
-    active_firms: firmCount?.c || 0,
-    mappings: mappingCount?.c || 0,
-    syncs_today: todayLogs?.c || 0,
-    errors_today: errorLogs?.c || 0,
-    last_sync: lastSync?.ls || null
+    total_depot_stock: totalDepot?.total||0,
+    active_firms: firmCount?.c||0,
+    mappings: mappingCount?.c||0,
+    syncs_today: todayLogs?.c||0,
+    errors_today: errorLogs?.c||0,
+    last_sync: lastSync?.ls||null
   });
 });
 
+// Test endpoint
+app.post('/api/test-trendyol', async (req, res) => {
+  const { supplier_id, api_key, api_secret } = req.body;
+  if (!supplier_id || !api_key || !api_secret) return res.json({ error: 'Eksik bilgi' });
+  try {
+    const token = Buffer.from(`${api_key}:${api_secret}`).toString('base64');
+    const url = `${BASE_URL}/${supplier_id}/products?page=0&size=1&approved=true`;
+    const response = await axios.get(url, {
+      headers: {
+        'Authorization': `Basic ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': `${supplier_id} - SelfIntegration`
+      },
+      timeout: 15000,
+      validateStatus: () => true
+    });
+    res.json({ status: response.status, statusText: response.statusText, data: typeof response.data === 'string' ? response.data.substring(0,500) : response.data });
+  } catch (e) { res.json({ error: e.message }); }
+});
+
 // ================================================================
-//  SUNUCU BAŞLAT
+//  BAŞLAT
 // ================================================================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Trendyol Stok Senkron sistemi çalışıyor: port ${PORT}`);
-  console.log(`📋 Panel: http://localhost:${PORT}`);
-  console.log(`⏱  Sync aralığı: her ${interval} dakika`);
+initDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`🚀 Trendyol Stok Senkron sistemi çalışıyor: port ${PORT}`);
+    console.log(`📋 Panel: http://localhost:${PORT}`);
+    console.log(`⏱  Sync aralığı: her ${interval} dakika`);
+  });
 });
