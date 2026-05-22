@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Trendyol API Test</title>
+<style>
+body{font-family:sans-serif;max-width:600px;margin:40px auto;padding:20px;background:#111;color:#eee;}
+input{width:100%;padding:8px;margin:6px 0 12px;background:#222;border:1px solid #444;color:#eee;border-radius:6px;}
+button{background:#f97316;color:#fff;border:none;padding:10px 24px;border-radius:6px;cursor:pointer;font-size:14px;}
+pre{background:#1a1a1a;padding:14px;border-radius:8px;overflow-x:auto;font-size:12px;white-space:pre-wrap;word-break:break-all;}
+label{font-size:13px;color:#aaa;}
+</style>
+</head>
+<body>
+<h2>🔧 Trendyol API Test</h2>
+<label>Supplier ID</label>
+<input type="text" id="sid" placeholder="451584">
+<label>API Key</label>
+<input type="text" id="key" placeholder="API Key">
+<label>API Secret</label>
+<input type="text" id="secret" placeholder="API Secret">
+<button onclick="testApi()">Test Et</button>
+<pre id="result">Sonuç burada görünecek...</pre>
+
+<script>
+async function testApi() {
+  const sid = document.getElementById('sid').value.trim();
+  const key = document.getElementById('key').value.trim();
+  const secret = document.getElementById('secret').value.trim();
+  
+  document.getElementById('result').textContent = 'Test ediliyor...';
+  
+  const res = await fetch('/api/test-trendyol', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({supplier_id: sid, api_key: key, api_secret: secret})
+  });
+  
+  const data = await res.json();
+  document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+}
+</script>
+</body>
+</html>
