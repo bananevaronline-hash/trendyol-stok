@@ -138,8 +138,12 @@ async function fetchFirmProducts(firm) {
   try {
     while (true) {
       const url = `${BASE_URL}/${firm.supplier_id}/products?page=${page}&size=${size}&approved=true`;
+      const headers = trendyolHeaders(firm.api_key, firm.api_secret, firm.supplier_id);
+      console.log(`[${firm.name}] URL: ${url}`);
+      console.log(`[${firm.name}] User-Agent: ${headers['User-Agent']}`);
+      console.log(`[${firm.name}] Auth: ${headers['Authorization'].substring(0, 20)}...`);
       const res = await axios.get(url, {
-        headers: trendyolHeaders(firm.api_key, firm.api_secret, firm.supplier_id),
+        headers,
         timeout: 15000
       });
       const content = res.data?.content || [];
