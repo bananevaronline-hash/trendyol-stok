@@ -310,6 +310,36 @@ setTimeout(runSync, 30000);
 //  API ROUTES
 // ================================================================
 
+
+// Test endpoint - Trendyol API doğrudan test
+app.post('/api/test-trendyol', async (req, res) => {
+  const { supplier_id, api_key, api_secret } = req.body;
+  if (!supplier_id || !api_key || !api_secret) return res.json({ error: 'Eksik bilgi' });
+  try {
+    const token = Buffer.from(`${api_key}:${api_secret}`).toString('base64');
+    const userAgent = `${supplier_id} - SelfIntegration`;
+    const url = `https://api.trendyol.com/sapigw/suppliers/${supplier_id}/products?page=0&size=1&approved=true`;
+    const response = await axios.get(url, {
+      headers: {
+        'Authorization': `Basic ${token}`,
+        'Content-Type': 'application/json',
+        'User-Agent': userAgent
+      },
+      timeout: 15000,
+      validateStatus: () => true // her status kodu dönsün
+    });
+    res.json({
+      status: response.status,
+      statusText: response.statusText,
+      user_agent_sent: userAgent,
+      auth_prefix: `Basic ${token.substring(0, 20)}...`,
+      data: response.data
+    });
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
 // Sağlık kontrolü
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString(), syncing: isSyncing });
